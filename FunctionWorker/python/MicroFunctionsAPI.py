@@ -82,28 +82,45 @@ class MicroFunctionsAPI:
         #self._logger.debug("[MicroFunctionsAPI] init done.")
 
     def ping(self, num):
-        self._logger.info("ping:" + str(num))
+        self._logger.info("ping: " + str(num))
         output = num
         return 'pong ' + str(output)
 
-    def get_privileged_data_layer_client(self, suid=None, keyspace=None, tablename=None, maptablename=None, settablename=None, countertablename=None, init_tables=False):
+    def get_privileged_data_layer_client(self, suid=None, sid=None, init_tables=False, drop_keyspace=False):
+        '''
+        Obtain a privileged data layer client to access a user's storage.
+        Only can be usable by the management service.
+
+        Args:
+            suid (string): the storage user id
+            sid (string): sandbox id
+            init_tables (boolean): whether relevant data layer tables should be initialized; default: False.
+            drop_keyspace (boolean): whether the relevant keyspace for the user's storage should be dropped; default: False.
+
+        Returns:
+            A data layer client with access to a user's storage.
+
+        '''
         if self._is_privileged:
             if suid is not None:
-                return DataLayerClient(locality=1, suid=suid, connect=self._datalayer, init_tables=init_tables)
-            elif keyspace is not None and tablename is not None:
-                dlc = DataLayerClient(locality=1, for_mfn=True, connect=self._datalayer)
-                dlc.keyspace = keyspace
-                dlc.tablename = tablename
-                if maptablename is not None:
-                    dlc.maptablename = maptablename
-                if settablename is not None:
-                    dlc.settablename = settablename
-                if countertablename is not None:
-                    dlc.countertablename = countertablename
-                return dlc
+                return DataLayerClient(locality=1, suid=suid, connect=self._datalayer, init_tables=init_tables, drop_keyspace=drop_keyspace)
+            elif sid is not None:
+                return DataLayerClient(locality=1, for_mfn=True, sid=sid, connect=self._datalayer, drop_keyspace=drop_keyspace)
         return None
 
     def update_metadata(self, metadata_name, metadata_value, is_privileged_metadata=False):
+        '''
+        Update the metadata that can be passed to other function instances and other components (e.g., recovery manager (not yet implemented)).
+
+        Args:
+            metadata_name (string): the key of the metadata to update
+            metadata_value (string): the value of the metadata
+            is_privileged_metadata (boolean): whether the metadata is privileged belonging to the management service
+
+        Returns:
+            None
+
+        '''
         is_privileged = False
         if is_privileged_metadata and self._is_privileged:
             is_privileged = True
@@ -118,11 +135,15 @@ class MicroFunctionsAPI:
 
         Args:
             rgid (string): the running long-running session function instance's id.
-            message (*): the 'message' to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
+            message (*): the message to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
             send_now (boolean): whether the message should be sent immediately or at the end of current function's execution; default: False.
 
         Returns:
             None
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
@@ -146,12 +167,16 @@ class MicroFunctionsAPI:
         it is not to be confused with the 'alias' that may have been assigned to each long-running, session function instance.
 
         Args:
-            gname (string): the function name (i.e., function name) of the running long-running session function instance(s).
-            message (*): the 'message' to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
+            gname (string): the function name of the running long-running session function instance(s).
+            message (*): the message to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
             send_now (boolean): whether the message should be sent immediately or at the end of current function's execution; default: False.
 
         Returns:
             None
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
@@ -172,11 +197,15 @@ class MicroFunctionsAPI:
         Send a message to all long-running session function instances in this session.
 
         Args:
-            message (*): the 'message' to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
+            message (*): the message to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
             send_now (boolean): whether the message should be sent immediately or at the end of current function's execution; default: False.
 
         Returns:
             None
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
@@ -200,11 +229,15 @@ class MicroFunctionsAPI:
 
         Args:
             alias (string): the alias of the running long-running session function instance that is the destination of the message.
-            message (*): the 'message' to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
+            message (*): the message to be sent; can be any python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
             send_now (boolean): whether the message should be sent immediately or at the end of current function's execution; default: False.
 
         Returns:
             None
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
@@ -237,6 +270,10 @@ class MicroFunctionsAPI:
         Warns:
             When the calling function is not a session function.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         messages = []
         if self._is_session_function:
@@ -263,6 +300,10 @@ class MicroFunctionsAPI:
         Warns:
             When the alias is already in use by another session.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         if not py3utils.is_string(alias) or alias == "":
             raise MicroFunctionsSessionAPIException("Invalid session alias; must be a non-empty string.")
@@ -284,6 +325,10 @@ class MicroFunctionsAPI:
         Returns:
             None
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         self._session_utils.unset_session_alias()
 
@@ -296,6 +341,10 @@ class MicroFunctionsAPI:
 
         Returns:
             The existing session alias (string) or None if no alias is set.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         if self._is_session_workflow:
@@ -324,6 +373,10 @@ class MicroFunctionsAPI:
             When calling function is not a session function.
             When no session function instance exists with the given session function id.
             When the alias is already in use by another existing session function instance.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         if not py3utils.is_string(alias):
@@ -355,6 +408,10 @@ class MicroFunctionsAPI:
             When calling function is not a session function if session function id is None.
             When no session function instance exists with the given session function id.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         # handle another session function's alias
         if session_function_id is not None:
@@ -380,6 +437,10 @@ class MicroFunctionsAPI:
             When calling function is not a session function if session function id is None.
             When no session function instance exists with the given session function id.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         # handle another session function's alias
         if session_function_id is not None:
@@ -402,6 +463,10 @@ class MicroFunctionsAPI:
 
         Warns:
             When the calling function is not part of a workflow with at least one session function.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         aliases = {}
@@ -428,6 +493,10 @@ class MicroFunctionsAPI:
         Warns:
             When the calling function is not part of a workflow with at least one session function.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         alias_summary = {}
         if self._is_session_workflow:
@@ -449,6 +518,10 @@ class MicroFunctionsAPI:
         Warns:
             When the calling function is not part of a workflow with at least one session function.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         if self._is_session_workflow:
             return self._session_utils.get_session_id()
@@ -468,6 +541,10 @@ class MicroFunctionsAPI:
 
         Warns:
             When the calling function is not a session function.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         if self._is_session_function:
@@ -490,6 +567,10 @@ class MicroFunctionsAPI:
 
         Warns:
             When the calling function is not a session function if the alias is not given.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         # handle another session function's alias
@@ -514,6 +595,10 @@ class MicroFunctionsAPI:
         Warns:
             When the calling function is not part of a workflow with at least one session function.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         rgidlist = []
         if self._is_session_workflow:
@@ -537,6 +622,10 @@ class MicroFunctionsAPI:
 
         Warns:
             When the calling function is not a session function.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., session functions).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         if self._is_session_function:
@@ -571,6 +660,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsWorkflowException: when either 'next' is not a string or 'value' is not a valid python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., dynamic workflow manipulation).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
         # we make the conversion according to the runtime
@@ -590,6 +683,11 @@ class MicroFunctionsAPI:
     def add_dynamic_next(self, next, value):
         '''
         Alias for add_workflow_next(self, next, value).
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., dynamic workflow manipulation).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         self.add_workflow_next(next, value)
 
@@ -601,10 +699,14 @@ class MicroFunctionsAPI:
 
         Args:
             destination (string): the destination of the message
-            value (*): message to be sent; must be a python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
+            value (*): the message to be sent; must be a python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
 
         Raises:
             MicroFunctionsWorkflowException: when either the destination is not a string or the value is not a python data type (<type 'dict', 'list', 'str', 'int', 'float', or 'NoneType'>).
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., 'AllowImmediateMessages').
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
 
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
@@ -643,6 +745,10 @@ class MicroFunctionsAPI:
             MicroFunctionsWorkflowException: when the input is neither a list of dictionaries or a single dictionary.
             MicroFunctionsWorkflowException: when in a dictionary, 'next' or 'value' is missing.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., dynamic workflow manipulation).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         # _XXX_: Java objects need to be serialized and passed to python; however, API functions expect python objects
         # we make the conversion according to the runtime
@@ -674,8 +780,14 @@ class MicroFunctionsAPI:
 
     def get_dynamic_workflow(self):
         '''
-        Return the dynamically generated workflow information,
-        so that this function instance can trigger other functions when it finishes.
+        Returns:
+            The dynamically generated workflow information,
+            so that this function instance can trigger other functions when it finishes.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., dynamic workflow manipulation).
+            Using a KNIX-specific feature might make the workflow description incompatible with other platforms.
+
         '''
         return self._publication_utils.get_dynamic_workflow()
 
@@ -719,14 +831,16 @@ class MicroFunctionsAPI:
 
     def get_event_key(self):
         '''
-        Return the function instance id (i.e., the key of the trigger event).
+        Returns:
+            The function instance id (i.e., the key of the trigger event).
         '''
         return self._instanceid
 
 
     def get_instance_id(self):
         '''
-        Return the function instance id (i.e., the key of the trigger event).
+        Returns:
+            The function instance id (i.e., the key of the trigger event).
         '''
         return self._instanceid
 
@@ -853,6 +967,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the mapname is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         self._logger.warning("MicroFunctionsAPI.createMap() does not have an effect; it will be removed in the future.")
         self._logger.warning("(Entries can still be added without calling createMap() beforehand.)")
@@ -880,6 +998,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when any of mapname, key and value is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(mapname) and py3utils.is_string(key) and py3utils.is_string(value) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.putMapEntry(mapname, key, value, is_private, is_queued)
@@ -900,6 +1022,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when any of mapname and key is not a string.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if py3utils.is_string(mapname) and py3utils.is_string(key) and isinstance(is_private, bool):
@@ -924,6 +1050,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when any of mapname and key is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(mapname) and py3utils.is_string(key) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.deleteMapEntry(mapname, key, is_private, is_queued)
@@ -945,6 +1075,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when any of mapname and key is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(mapname) and py3utils.is_string(key) and isinstance(is_private, bool):
             return self._data_layer_operator.containsMapKey(mapname, key, is_private)
@@ -964,6 +1098,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when the mapname is not a string.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if py3utils.is_string(mapname) and isinstance(is_private, bool):
@@ -987,6 +1125,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the mapname is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(mapname) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.clearMap(mapname, is_private, is_queued)
@@ -1009,6 +1151,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the mapname is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(mapname) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.deleteMap(mapname, is_private, is_queued)
@@ -1028,6 +1174,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when the mapname is not a string.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if py3utils.is_string(mapname) and isinstance(is_private, bool):
@@ -1049,6 +1199,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when start_index < 0 and/or end_index > 2147483647.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if start_index >= 0 and end_index <= 2147483647 and isinstance(is_private, bool):
@@ -1077,6 +1231,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the setname is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         self._logger.warning("MicroFunctionsAPI.createSet() does not have an effect; it will be removed in the future.")
         self._logger.warning("(Items can still be added without calling createSet() beforehand.)")
@@ -1103,6 +1261,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when any of setname and item is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(setname) and py3utils.is_string(item) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.addSetEntry(setname, item, is_private, is_queued)
@@ -1126,6 +1288,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when any of setname and item is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(setname) and py3utils.is_string(item) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.removeSetEntry(setname, item, is_private, is_queued)
@@ -1147,6 +1313,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when any of setname and item is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(setname) and py3utils.is_string(item) and isinstance(is_private, bool):
             return self._data_layer_operator.containsSetItem(setname, item, is_private)
@@ -1166,6 +1336,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when the setname is not a string.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if py3utils.is_string(setname) and isinstance(is_private, bool):
@@ -1189,6 +1363,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the setname is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(setname) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.clearSet(setname, is_private, is_queued)
@@ -1211,6 +1389,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the setname is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(setname) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.deleteSet(setname, is_private, is_queued)
@@ -1231,6 +1413,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when start_index < 0 and/or end_index > 2147483647.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if start_index >= 0 and end_index <= 2147483647 and isinstance(is_private, bool):
@@ -1256,6 +1442,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the countername is not a string and/or the initial count is not an integer.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(countername) and isinstance(count, int) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.createCounter(countername, count, is_private, is_queued)
@@ -1275,6 +1465,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when the countername is not a string.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if py3utils.is_string(countername) and isinstance(is_private, bool):
@@ -1297,6 +1491,10 @@ class MicroFunctionsAPI:
 
         Raises:
             MicroFunctionsDataLayerException: when the countername is not a string and/or the increment is not an integer.
+
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
 
         '''
         if py3utils.is_string(countername) and isinstance(increment, int) and isinstance(is_private, bool) and isinstance(is_queued, bool):
@@ -1321,6 +1519,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the countername is not a string and/or the decrement is not an integer.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(countername) and isinstance(decrement, int) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.decrementCounter(countername, decrement, is_private, is_queued)
@@ -1343,6 +1545,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when the countername is not a string.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if py3utils.is_string(countername) and isinstance(is_private, bool) and isinstance(is_queued, bool):
             self._data_layer_operator.deleteCounter(countername, is_private, is_queued)
@@ -1364,6 +1570,10 @@ class MicroFunctionsAPI:
         Raises:
             MicroFunctionsDataLayerException: when start_index < 0 and/or end_index > 2147483647.
 
+        Note:
+            The usage of this function is only possible with a KNIX-specific feature (i.e., support for CRDTs).
+            Using a KNIX-specific feature might make the function incompatible with other platforms.
+
         '''
         if start_index >= 0 and end_index <= 2147483647 and isinstance(is_private, bool):
             return self._data_layer_operator.getCounterNames(start_index, end_index, is_private)
@@ -1374,23 +1584,26 @@ class MicroFunctionsAPI:
 
     def get_transient_data_output(self, is_private=False):
         '''
-        Return the transient data, so that it can be committed to the data layer
-        when the function instance finishes.
+        Returns:
+            The transient data, so that it can be committed to the data layer
+            when the function instance finishes.
         '''
         return self._data_layer_operator.get_transient_data_output(is_private)
 
     def get_data_to_be_deleted(self, is_private=False):
         '''
-        Return the list of deleted data items, so that they can be committed to the data layer
-        when the function instance finishes.
+        Returns:
+            The list of deleted data items, so that they can be committed to the data layer
+            when the function instance finishes.
         '''
         return self._data_layer_operator.get_data_to_be_deleted(is_private)
 
     def _get_data_layer_client(self, is_private=False):
         '''
-        Return the data layer client, so that it can be used to commit to the data layer
-        when the function instance finishes.
-        If it is not initialized yet, it will be initialized here.
+        Returns:
+            The data layer client, so that it can be used to commit to the data layer
+            when the function instance finishes.
+            If it is not initialized yet, it will be initialized here.
         '''
         return self._data_layer_operator._get_data_layer_client(is_private)
 

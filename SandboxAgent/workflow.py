@@ -28,9 +28,10 @@ class WorkflowStateType:
     FAIL_STATE_TYPE = "Fail"
     WAIT_STATE_TYPE = "Wait"
     PARALLEL_STATE_TYPE = "Parallel"
+    MAP_STATE_TYPE = "Map"
 
 class WorkflowNode:
-    def __init__(self, topic, nextNodes, potNext, gwftype, gwfstatename, gwfstateinfo, is_session_function, sgparams, logger):
+    def __init__(self, topic, nextNodes, potNext, gwftype, gwfstatename, gwfstateinfo, is_session_function, sfparams, logger):
 
         self.nodeId = topic
         self.nextMap = {}
@@ -52,7 +53,7 @@ class WorkflowNode:
             self.potentialNextMap[potnext_node] = True
 
         self._is_session_function = is_session_function
-        self._session_function_parameters = sgparams
+        self._session_function_parameters = sfparams
 
     def getNextMap(self):
         return self.nextMap
@@ -100,6 +101,9 @@ class Workflow:
         self.parallelStateNamesStack = collections.deque([])
         self.parallelBranchCounterStack = collections.deque([])
 
+        self.mapStateNamesStack = collections.deque([])
+        self.mapBranchCounterStack = collections.deque([])
+
         self.workflowExitPoint = None
         self.workflowExitTopic = None
 
@@ -107,6 +111,7 @@ class Workflow:
 
         # whether the function workers should store backups of triggers to next functions
         self._enable_checkpoints = True
+        self._allow_immediate_messages = False
 
         self._has_error = False
 
@@ -123,6 +128,7 @@ class Workflow:
                 "name": "test_workflow",
                 "entry": "entryFunction",
                 "enable_checkpoints": False,
+                "allow_immediate_messages": True,
                 "exit": "exitName",
                 "functions": [
                     {
@@ -155,8 +161,12 @@ class Workflow:
         if "enable_checkpoints" in wfobj.keys():
             self._enable_checkpoints = wfobj["enable_checkpoints"]
 
-        # also include the exit as a potential destination for sending immediate trigger messages
-        self.workflowFunctionMap[self.workflowExitPoint] = True
+        if "allow_immediate_messages" in wfobj.keys():
+            self._allow_immediate_messages = wfobj["allow_immediate_messages"]
+
+        if self._allow_immediate_messages:
+            # also include the exit as a potential destination for sending immediate trigger messages
+            self.workflowFunctionMap[self.workflowExitPoint] = True
 
         self.workflowExitTopic = self.topicPrefix + self.workflowExitPoint
         self._logger.info("parseSAND: workflowExitTopic: " + self.workflowExitTopic)
@@ -168,8 +178,9 @@ class Workflow:
             if "resource" in function:
                 resource = function["resource"]
 
-            # keep a map of function names as potential destination for sending immediate trigger messages
-            self.workflowFunctionMap[gname] = True
+            if self._allow_immediate_messages:
+                # keep a map of function names as potential destination for sending immediate trigger messages
+                self.workflowFunctionMap[gname] = True
             topic = self.topicPrefix + gname
 
             #print("topic:", topic)
@@ -196,18 +207,17 @@ class Workflow:
             if "isSessionFunction" in function.keys():
                 is_session_function = function["isSessionFunction"]
 
-            sgparams = {}
-            if "sessionFunctionParameters" in function.keys():
-                sgparams = function["sessionFunctionParameters"]
+            sfparams = {}
+            if is_session_function and "sessionFunctionParameters" in function.keys():
+                sfparams = function["sessionFunctionParameters"]
 
-            wfnode = WorkflowNode(topic, nextNodes, potNext, gwftype, gwfstatename, gwfstateinfo, is_session_function, sgparams, self._logger)
+            wfnode = WorkflowNode(topic, nextNodes, potNext, gwftype, gwfstatename, gwfstateinfo, is_session_function, sfparams, self._logger)
 
             self.workflowNodeMap[topic] = wfnode
 
             if is_session_function:
                 self._is_session_workflow = True
                 self.workflowSessionFunctions[gname] = is_session_function
-
 
         # check whether all 'next' fields refer to existing functions
         # for (Map.Entry<String, WorkflowNode> entry: this.workflowNodeMap.entrySet())
@@ -240,19 +250,27 @@ class Workflow:
         self.workflowName = self.workflowId # there is no "Name" key in ASL
         self.workflowEntryPoint = wfobj["StartAt"]
         self.workflowEntryTopic = self.topicPrefix + self.workflowEntryPoint
+
+        if "EnableCheckpoints" in wfobj.keys():
+            self._enable_checkpoints = wfobj["EnableCheckpoints"]
+
+        if "AllowImmediateMessages" in wfobj.keys():
+            self._allow_immediate_messages = wfobj["AllowImmediateMessages"]
+
         self._logger.info("parseASL: workflowName: " + self.workflowName)
         self._logger.info("parseASL: workflowEntryPoint: " + self.workflowEntryTopic)
         workflowstates = wfobj["States"]
         self.parseStates(workflowstates)
 
-    def createAndAddASLWorkflowNode(self, gname, nextNodes, potNext, gwfstatetype, gwfstatename, gwfstateinfo):
+    def createAndAddASLWorkflowNode(self, gname, nextNodes, potNext, gwfstatetype, gwfstatename, gwfstateinfo, is_session_function=False, sfparams={}):
         topic = self.topicPrefix + gname
-        # ASL workflows do not support sessions
-        is_session_function = False
-        sgparams = {}
 
-        wfnode = WorkflowNode(topic, nextNodes, potNext, gwfstatetype, gwfstatename, gwfstateinfo, is_session_function, sgparams, self._logger)
+        wfnode = WorkflowNode(topic, nextNodes, potNext, gwfstatetype, gwfstatename, gwfstateinfo, is_session_function, sfparams, self._logger)
         self.workflowNodeMap[topic] = wfnode # add new node to workflow node map
+
+    def insideMapBranchAlready(self):
+        if self.mapStateNamesStack:
+            return True  # not empty
 
     def insideParallelBranchAlready(self):
         if self.parallelStateNamesStack:
@@ -266,14 +284,21 @@ class Workflow:
         parentInfo["BranchCounter"] = self.parallelBranchCounterStack[len(self.parallelBranchCounterStack)-1] # peek() operation
         return parentInfo
 
+    def constructParentMapInfo(self):
+        parentInfo = {}
+        parentInfo["Name"] = self.mapStateNamesStack[len(self.mapStateNamesStack)-1] # peek() operation
+        #parentInfo["BranchCounter"] = self.mapBranchCounterStack[len(self.parallelBranchCounterStack)-1] # peek() operation
+        parentInfo["BranchCounter"] = 1 # hardcoded branch count, required?
+        return parentInfo
+
+
     def parseStates(self, workflowstates):
         for statename in workflowstates.keys(): # loop over ASL states
             stateinfo = workflowstates[statename] # loop over the states in the set
             assert "Type" in stateinfo.keys()
             statetype = stateinfo["Type"]
 
-            self._logger.info("parseStates: State name: " + statename)
-            self._logger.info("parseStates: State type: " + statetype)
+            self._logger.info("parseStates: State name: %s, state type: %s", statename, statetype)
 
             if statetype == WorkflowStateType.TASK_STATE_TYPE:
                 self.parseTaskState(statename, stateinfo)
@@ -289,6 +314,8 @@ class Workflow:
                 self.parseWaitState(statename, stateinfo)
             elif statetype == WorkflowStateType.PARALLEL_STATE_TYPE:
                 self.parseParallelState(statename, stateinfo)
+            elif statetype == WorkflowStateType.MAP_STATE_TYPE:
+                self.parseMapState(statename, stateinfo)
             else:
                 raise Exception("Error: unknown state type")
 
@@ -303,8 +330,10 @@ class Workflow:
         if "End" in taskstateinfo.keys():
             value = taskstateinfo["End"]
 
-            if bool(value) and not self.insideParallelBranchAlready():
+            if bool(value) and not (self.insideParallelBranchAlready() or self.insideMapBranchAlready()):
                 self.workflowExitPoint = "end"
+                if self._allow_immediate_messages:
+                    self.workflowFunctionMap[self.workflowExitPoint] = True
                 nextNodes.append(self.workflowExitPoint)
                 self.workflowExitTopic = self.topicPrefix + self.workflowExitPoint
             #else:
@@ -320,6 +349,21 @@ class Workflow:
             sizePotNext = len(potential)
             for j in range(sizePotNext):
                 potNext.append(potential[j])
+
+        is_session_function = False
+        if "SessionFunction" in taskstateinfo.keys():
+            is_session_function = taskstateinfo["SessionFunction"]
+
+        sfparams = {}
+        if is_session_function and "SessionFunctionParameters" in taskstateinfo.keys():
+            sfparams = taskstateinfo["SessionFunctionParameters"]
+
+        if is_session_function:
+            self._is_session_workflow = True
+            self.workflowSessionFunctions[taskstatename] = is_session_function
+
+        if self._allow_immediate_messages:
+            self.workflowFunctionMap[taskstatename] = True
 
         if "Catch" in taskstateinfo.keys(): # need to add Catch Next to potentialNext
             for catch in taskstateinfo["Catch"]:
@@ -337,8 +381,11 @@ class Workflow:
         if self.insideParallelBranchAlready():
             taskstateinfo["ParentParallelInfo"] = self.constructParentParallelInfo()
 
+        if self.insideMapBranchAlready():
+            taskstateinfo["ParentMapInfo"] = self.constructParentMapInfo()
+
         self._logger.info("parseTask: State info: " + str(taskstateinfo))
-        self.createAndAddASLWorkflowNode(taskstatename, nextNodes, potNext, WorkflowStateType.TASK_STATE_TYPE, taskstatename, taskstateinfo)
+        self.createAndAddASLWorkflowNode(taskstatename, nextNodes, potNext, WorkflowStateType.TASK_STATE_TYPE, taskstatename, taskstateinfo, is_session_function, sfparams)
 
     def parseChoiceState(self, choicestatename, choicestateinfo):
         potNext = []
@@ -365,6 +412,9 @@ class Workflow:
         if self.insideParallelBranchAlready():
             choicestateinfo["ParentParallelInfo"] = self.constructParentParallelInfo()
 
+        if self.insideMapBranchAlready():
+            choicestateinfo["ParentMapInfo"] = self.constructParentMapInfo()
+
         self._logger.info("parseChoice: State info: " + str(choicestateinfo))
         self.createAndAddASLWorkflowNode(gname, nextNodes, potNext, WorkflowStateType.CHOICE_STATE_TYPE, choicestatename, choicestateinfo)
 
@@ -374,7 +424,7 @@ class Workflow:
         gname = passstatename
         if "End" in passstateinfo.keys():
             value = passstateinfo["End"]
-            if bool(value) and not self.insideParallelBranchAlready():
+            if bool(value) and not (self.insideParallelBranchAlready() or self.insideMapBranchAlready()):
                 self.workflowExitPoint = "end"
                 nextNodes.append(self.workflowExitPoint)
                 self.workflowExitTopic = self.topicPrefix + self.workflowExitPoint
@@ -392,6 +442,10 @@ class Workflow:
         """
         if self.insideParallelBranchAlready():
             passstateinfo["ParentParallelInfo"] = self.constructParentParallelInfo()
+
+        if self.insideMapBranchAlready():
+            passstateinfo["ParentMapInfo"] = self.constructParentMapInfo()
+
         self._logger.info("parsePass: State info: " + str(passstateinfo))
         self.createAndAddASLWorkflowNode(gname, nextNodes, potNext, WorkflowStateType.PASS_STATE_TYPE, passstatename, passstateinfo)
 
@@ -411,6 +465,10 @@ class Workflow:
 
         if self.insideParallelBranchAlready():
             succeedstateinfo["ParentParallelInfo"] = self.constructParentParallelInfo()
+
+        if self.insideMapBranchAlready():
+            succeedstateinfo["ParentMapInfo"] = self.constructParentMapInfo()
+
         self._logger.info("parseSucceed: State info: " + str(succeedstateinfo))
         self.createAndAddASLWorkflowNode(gname, nextNodes, potNext, WorkflowStateType.SUCCEED_STATE_TYPE, succeedstatename, succeedstateinfo)
 
@@ -432,6 +490,9 @@ class Workflow:
 
         if self.insideParallelBranchAlready():
             failstateinfo["ParentParallelInfo"] = self.constructParentParallelInfo()
+
+        if self.insideMapBranchAlready():
+            failstateinfo["ParentMapInfo"] = self.constructParentMapInfo()
 
         self._logger.info("parseFail: State info: " + str(failstateinfo))
         self.createAndAddASLWorkflowNode(gname, nextNodes, potNext, WorkflowStateType.FAIL_STATE_TYPE, failstatename, failstateinfo)
@@ -462,8 +523,12 @@ class Workflow:
         if (waitstateinfo.has("InputPath")) {}
         if (waitstateinfo.has("OutputPath")) {}
         """
+
         if self.insideParallelBranchAlready():
             waitstateinfo["ParentParallelInfo"] = self.constructParentParallelInfo()
+
+        if self.insideMapBranchAlready():
+            waitstateinfo["ParentParallelInfo"] = self.constructParentMapInfo()
 
         self._logger.info("parseWait: State info: " + str(waitstateinfo))
         self.createAndAddASLWorkflowNode(gname, nextNodes, potNext, WorkflowStateType.WAIT_STATE_TYPE, waitstatename, waitstateinfo)
@@ -527,6 +592,67 @@ class Workflow:
         self.parallelStateNamesStack.pop()
         self._logger.info("parseParallel: State info: " + str(parallelstateinfo))
         self.createAndAddASLWorkflowNode(parallelstatename, nextNodes, potNext, WorkflowStateType.PARALLEL_STATE_TYPE, parallelstatename, parallelstateinfo)
+
+    def parseMapState(self, mapstatename, mapstateinfo):
+        potNext = []
+        nextNodes = []
+        mapstateinfo["WorkflowID"] = self.workflowId
+        mapstateinfo["SandboxID"] = self.sandboxId
+        self._logger.info("Inside parseMapState, mapstateinfo: " + str(mapstateinfo))
+        if "End" in mapstateinfo.keys() and mapstateinfo["End"] == True:
+            value = mapstateinfo["End"]
+            if bool(value) and not self.insideMapBranchAlready():
+                self.workflowExitPoint = "end"
+                potNext.append(self.workflowExitPoint)
+                self.workflowExitTopic = self.topicPrefix + self.workflowExitPoint
+            #else:
+                # This is a branch end and not a workflow exit point
+        else:
+            mapstateinfo["End"] = False
+            if "Next" in mapstateinfo.keys():
+                potNext.append(mapstateinfo["Next"])
+                #nextNodes.append(mapstateinfo["Next"])
+
+        """
+        if(mapstateinfo.has("InputPath"))
+        if(mapstateinfo.has("OutputPath"))
+        if(mapstateinfo.has("ResultPath"))
+        """
+
+        mapstateinfo["Name"] = mapstatename
+
+        if self.insideMapBranchAlready():
+            mapstateinfo["ParentMapInfo"] = self.constructParentMapInfo() # BranchCounter needs to be added by FunctionWorker
+        #mapstateinfo["ParentMapInfo"] = {"Name": mapstatename, "BranchCounter": 1}
+
+        self.mapStateNamesStack.append(mapstatename)
+        if "MaxConcurrency" in mapstateinfo.keys():
+            mapstateinfo["MaxConcurrency"] = mapstateinfo["MaxConcurrency"]
+
+        if "Iterator" in mapstateinfo.keys():
+            count = 1 # hardcoded number of branches
+            iterator = mapstateinfo["Iterator"]
+
+            self.mapBranchCounterStack.append(1)
+
+            if "StartAt" in iterator.keys():
+                potNext.append(iterator["StartAt"])
+            else:
+                raise Exception("Iterator missing StartAt field")
+
+            if "States" in iterator.keys():
+                self.parseStates(iterator["States"])
+            else:
+                raise Exception("Iterator missing States field")
+
+            mapstateinfo["BranchCount"] = count # needs to be corrected in FunctionWorker
+
+        else:
+            self._logger.info("parseMapState: 'Iterator' parameter missing from state description of: " + mapstatename)
+            raise Exception("'Iterator' parameter missing from state description of: " + mapstatename)
+        self.mapStateNamesStack.pop()
+        self._logger.info("parseMap: State info: " + str(mapstateinfo))
+        self.createAndAddASLWorkflowNode(mapstatename, nextNodes, potNext, WorkflowStateType.MAP_STATE_TYPE, mapstatename, mapstateinfo)
 
     def getWorkflowNode(self, topic):
         return self.workflowNodeMap[topic]

@@ -12,7 +12,29 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-default: app/pages/docs/sdk/cli.md app/pages/docs/sdk/sdk.md
+SHELL := /bin/bash
+-include ../proxy.mk
+include ../docker.mk
+
+default: app/pages/docs/sdk/cli.md \
+	app/pages/docs/sdk/sdk.md \
+	app/pages/docs/api/java \
+	app/pages/docs/api/python
+
+app/pages/docs/api/python:
+	mkdir -p app/pages/docs/api/python; \
+	cd ../FunctionWorker; \
+	make python_api_doc; \
+	cd -; \
+	cp ../FunctionWorker/doc/MicroFunctionsAPI.html app/pages/docs/api/python/; \
+	sed -i 's/<body>/<body bgcolor="#fff">/g' app/pages/docs/api/python/MicroFunctionsAPI.html
+
+app/pages/docs/api/java:
+	mkdir -p app/pages/docs/api/javadoc; \
+	cd ../JavaRequestHandler; \
+	make java_api_doc; \
+	cd -; \
+	cp -r ../JavaRequestHandler/target/site/apidocs/* app/pages/docs/api/javadoc
 
 app/pages/docs/sdk/sdk.md: ../mfn_sdk/README.md
 	cp ../mfn_sdk/README.md app/pages/docs/sdk/sdk.md
@@ -20,10 +42,10 @@ app/pages/docs/sdk/sdk.md: ../mfn_sdk/README.md
 app/pages/docs/sdk/cli.md: ../mfn_cli/README.md
 	cp ../mfn_cli/README.md app/pages/docs/sdk/cli.md
 
--include ../proxy.mk
-include ../docker.mk
-
-image: $(shell find ./ -type f|grep -v Makefile)
+image:	app/pages/docs/sdk/cli.md \
+	app/pages/docs/sdk/sdk.md \
+	app/pages/docs/api/java \
+	app/pages/docs/api/python
 	$(call build_image,Dockerfile,microfn/nginx)
 
 push: image

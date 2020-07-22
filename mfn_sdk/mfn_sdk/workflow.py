@@ -84,7 +84,7 @@ class Workflow(object):
 
     @property
     def status(self):
-        data = self.client.action('getWorkflowStatus',{'workflow':{'id':self.id}})
+        data = self.client.action('getWorkflows',{'workflow':{'id':self.id}})
         self._status = data['workflow']['status']
         if self._status == "deployed":
             self._endpoints = data['workflow']['endpoints']
@@ -304,7 +304,6 @@ class Workflow(object):
         :clear: default=False; if True, the function calls delete_logs() before returning
         :returns: a dict {'exceptions':<str>,'progress':<str>,'log':<str>}
         """
-        #self.client.action('prepareAllWorkflowLogs',{'workflow':{'id':self.id}})
         #print("earliest: " + str(ts_earliest))
         data = self.client.action('retrieveAllWorkflowLogs',{'workflow':{'id':self.id, 'ts_earliest': ts_earliest, 'num_lines': num_lines}})
         res = {'exceptions':base64.b64decode(data['workflow']['exceptions']).decode(),

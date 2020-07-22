@@ -150,21 +150,15 @@ class MfnClient(object):
             url = url[:-1]
         log.info(f"Connecting as {user} to {url}")
         self._s = requests.Session()
-        self._s.verify=False
         if proxies:
             self._s.proxies.update(proxies)
         self._s.max_redirects = 10
 
-        self.weburl = str(url)
-        epr = self._s.get(self.weburl+"/app/endpoint.js")
-        epr.raise_for_status()
-        epf = epr.text
-        idx = epf.index("managementServiceEndpoint")
-        idx = epf.index('"http:',idx)+1
-        self.mgmturl=epf[idx:epf.index('"',idx)]
+        self.baseurl = str(url)
+        self.mgmturl= self.baseurl.rstrip("/")+"/management"
         self.user=user
         self.token=None
-        self.store=self.weburl
+        self.store=""
         self.name=name
         self.password=password
         self._functions=[]
@@ -180,7 +174,7 @@ class MfnClient(object):
                 userinfo = {}
                 userinfo["email"] = self.user
                 userinfo["password"] = self.password
-                userinfo["name"] = name
+                userinfo["name"] = self.name
                 data_to_send = {}
                 data_to_send["action"] = "signUp"
                 data_to_send["data"] = {}
@@ -213,6 +207,9 @@ class MfnClient(object):
         if self._s is not None:
             self._s.close()
 
+    def version(self):
+        data = self.action('version')
+        return data.get('message','')
 
     def login(self):
         userinfo = {}
@@ -237,10 +234,17 @@ class MfnClient(object):
         resp = r.json()
         if resp['status'] == 'success':
             self.token = resp['data']['token']
-            self.store = self.weburl+resp['data']['storageEndpoint']
+            self.store = self.baseurl+resp['data']['storageEndpoint']
         else:
             raise Exception("Error logging in at "+self.mgmturl)
 
+
+    def delete_user(self):
+        data = {}
+        data["user"] = {}
+        data["user"]["token"] = self.token
+
+        self.action("deleteAccount", data)
 
     def action(self,action,data=None):
         if data is None:
@@ -389,7 +393,6 @@ class MfnClient(object):
     def delWorkflow(self,wf):
         return self.delete_workflow(wf)
 
-
     def find_workflow(self,name):
         res = []
         for wf in self.workflows:
@@ -437,6 +440,12 @@ class MfnClient(object):
                 for branch in branches:
                     parallel_state_list = self._get_state_names_and_resource(desired_state_type, branch)
                     state_list = state_list + parallel_state_list
+
+            if state_type == 'Map':
+                branch = state['Iterator']
+                map_state_list = self._get_state_names_and_resource(desired_state_type, branch)
+                state_list = state_list + map_state_list
+
         return state_list
 
 
@@ -484,6 +493,7 @@ class MfnClient(object):
                     log.warn("Neither the ZIP file %s nor the source code %s was found for function %s" % (fzipname,fpyname,fname))
 
                 log.info("Adding function: " + fname)
+
                 f = self.add_function(fname)
 
                 # Upload the .zip file
@@ -539,7 +549,7 @@ class MfnClient(object):
         r = self._s.get(self.store,#verify=False,
                 params=data_to_send)
         r.raise_for_status()
-        return r.text
+        return r.json()
 
 
     def put(self,key,value,table="defaultTable"):
@@ -555,7 +565,7 @@ class MfnClient(object):
                     json=value)
         r.raise_for_status()
         if r.text != "true":
-            raise Exception("PUT failed: "+r.text)
+            raise Exception("PUT failed: " + r.text)
 
 
     def delete(self,key,table="defaultTable"):
@@ -569,6 +579,4 @@ class MfnClient(object):
                     params=data_to_send)
         r.raise_for_status()
         if r.text != "true":
-            raise Exception("PUT failed: "+r.text)
-
-
+            raise Exception("DELETE failed: " + r.text)

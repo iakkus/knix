@@ -13,12 +13,13 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-# Maybe join to a cluster
-if [[ ${COORDINATOR_NODE} != ${HOSTNAME}* && ${HOSTNAME} != ${COORDINATOR_NODE}* ]]; then
-#if [[ -z "$($RIAK_ADMIN cluster status | grep $COORDINATOR_NODE_HOST)" && ${HOSTNAME} != ${COORDINATOR_NODE}* ]]; then
-  # Not already in this cluster and not the coordinator itself, so join
-  echo "Connecting to cluster coordinator $COORDINATOR_NODE_HOST"
-  $RIAK_ADMIN cluster join riak@$COORDINATOR_NODE_HOST
+# If not coordinator, join it to form a cluster
+# TODO: restart of coordinator node may leave it outside the cluster
+if [[ -z "$($RIAK_ADMIN cluster status | grep $COORDINATOR_NODE)" ]]; then
+  echo "Connecting to cluster coordinator $COORDINATOR_NODE"
+  SERVICE_PORT=$(env|grep 'RK_.*_SERVICE_PORT_HTTP'|sed 's/.*=//')
+  curl -s http://$COORDINATOR_NODE:${SERVICE_PORT:-8098} >/dev/null
+  $RIAK_ADMIN cluster join riak@$COORDINATOR_NODE
   if [[ ! -z "($RIAK_ADMIN cluster status | grep ${HOSTNAME} | grep 'joining')" ]]; then
     if [[ -z "$($RIAK_ADMIN cluster plan | grep 'There are no staged changes')" ]]; then
       while [[ -z "$($RIAK_ADMIN ringready|grep '^TRUE')" ]]; do

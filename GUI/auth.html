@@ -22,8 +22,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MicroFunctions</title>
 
-  <script src="app/endpoint.js"></script>
-
   <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900italic,900&subset=latin,greek,greek-ext,vietnamese,cyrillic-ext,latin-ext,cyrillic' rel='stylesheet' type='text/css'>
   
   <link rel="stylesheet" href="lib/bootstrap.css" >
@@ -34,43 +32,77 @@
   <link rel="stylesheet" href="app/auth.css">
   <script>
   
+    document.onreadystatechange = getVersion;
+    function getVersion() {
+      var xhr = new XMLHttpRequest();
+      var url = "/management";
+
+      xhr.open("POST", url, true);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          var success = false;
+          if(xhr.status === 200) {
+            var json = JSON.parse(xhr.responseText.toString());
+            if (json.status==='success') {
+              success = true;
+            }
+          }
+          if (success) {
+            document.getElementById("auth-block").style.display = "block";
+            document.getElementById("unavailable-block").style.display = "none";
+            document.getElementById("version").innerHTML = json.data.message;
+          } else {
+            document.getElementById("auth-block").style.display = "none";
+            document.getElementById("unavailable-block").style.display = "block";
+            document.getElementById("version").innerHTML = "";
+            window.setTimeout(getVersion, 5000);
+          }
+        }
+      };
+      var jsonData = '{"action" : "version", "data" : {}}';
+      xhr.setRequestHeader("Content-type", "application/json;charset=UTF-8");
+      xhr.send(jsonData);
+    };
     function auth() {
 
       var xhr = new XMLHttpRequest();
-      var url = managementServiceEndpoint; // from app/endpoint.js
+      var url = "/management";
 
-      if (url=="") {
-        document.getElementById('message').innerHTML = '<a href="#" class="auth-link" style="color:#2dacd1;font-size:20px;">Error: Management service URL not set</a>';
-      } else {
-        xhr.open("POST", url, true);
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4 && xhr.status === 200) {
-                            
-                var json = JSON.parse(xhr.responseText.toString());
-                
-                if (json.status==='success') {
-                  document.cookie = "token=" + json.data.token + "; path=/";
-                  document.cookie = "email=" + document.getElementById('inputEmail').value + "; path=/";
-                  console.log(json.data.token);
-                  document.location.href="index.html";
-                } else {
-                  document.getElementById('message').innerHTML = '<a href="#" class="auth-link" style="color:#2dacd1;font-size:20px;">No match! Please try again.</a>';
-                }
+      xhr.open("POST", url, true);
+      xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+                          
+              var json = JSON.parse(xhr.responseText.toString());
+              
+              if (json.status==='success') {
+                document.cookie = "token=" + json.data.token + "; path=/";
+                document.cookie = "email=" + document.getElementById('inputEmail').value + "; path=/";
+                document.cookie = "name=" + json.data.name + "; path=/";
+                console.log(json.data.token);
+                document.location.href="index.html";
+              } else {
+                document.getElementById('message').innerHTML = '<a href="#" class="auth-link" style="color:#2dacd1;font-size:20px;">No match! Please try again.</a>';
+              }
 
-            }
-        };
-        var jsonData = '{"action" : "logIn", "data" : { "user" : { "email" : "' + document.getElementById('inputEmail').value + '", "password" : "' + document.getElementById('inputPassword').value + '" } }}';
+          }
+      };
+      var jsonData = '{"action" : "logIn", "data" : { "user" : { "email" : "' + document.getElementById('inputEmail').value + '", "password" : "' + document.getElementById('inputPassword').value + '" } }}';
 
-        xhr.setRequestHeader("Content-type", "application/json;charset=UTF-8");
+      xhr.setRequestHeader("Content-type", "application/json;charset=UTF-8");
 
-        xhr.send(jsonData);
-      }
+      xhr.send(jsonData);
     }
   </script>
 </head>
 <body>
 <main class="auth-main">
-  <div class="auth-block">
+  <div class="auth-block" id="unavailable-block" style="display: block;">
+    <center><h1><b>KNIX</b> Micro<b>Functions</b><br>is currently down</h1></center>
+    <div style="color:#2dacd1;font-size:20px;">
+      <center>We'll be back shortly.</center>
+    </div>
+  </div>
+  <div class="auth-block" id="auth-block" style="display: none;">
     <center><h1>Sign in to <b>KNIX</b> Micro<b>Functions</b></h1></center>
     <div id="message" style="color:#2dacd1;font-size:20px;">
       <a href="reg.html" class="auth-link" style="color:#2dacd1;font-size:20px;">New to <b>KNIX</b> MicroFunctions? Sign up!</a>
@@ -96,6 +128,8 @@
           <button type="button" onclick="javascript:auth();" class="btn btn-info btn-auth">Sign in</button>
           <!--<a href class="forgot-pass" style="color:#fff">Forgot password?</a>-->
         </div>
+      </div>
+      <div id="version" style="color:#4d5658;font-size:10px;">
       </div>
     </form>
 

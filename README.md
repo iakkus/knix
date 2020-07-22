@@ -9,7 +9,7 @@ Compared with existing serverless computing platforms, **KNIX MicroFunctions** h
 * Low function startup latency & high resource efficiency
 * Fast locality-aware storage access
 * Python and Java function runtimes
-* Workflow support and compatibility with Amazon States Language (ASL)
+* Workflow support and compatibility with [Amazon States Language (ASL)](https://states-language.net/spec.html)
 * Support for long-running functions for continuous data processing applications
 * Powerful web UI, SDK and CLI for effective serverless application development
 
@@ -26,37 +26,15 @@ This section covers installing KNIX.
 
 ### Installing KNIX MicroFunctions on Kubernetes
 
-To install KNIX, you’ll need a running Kubernetes cluster with Knative and root privileges to install KNIX into its own namespace. In particular, KNIX has been tested with the following:
+KNIX can be installed using helm charts, assuming you have a Kubernetes cluster and Knative running.
 
-* [Kubernetes:](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) version 1.17.5 with storage class for persistent volume claims
-* [Helm:](https://github.com/kubernetes/helm) version 3.1.2
-* [Knative:](https://knative.dev) version 0.13.0
-
-KNIX can be installed using helm charts. Assuming you have a Kubernetes cluster and Knative running, simply run the following command:
-
-```bash
-# Install KNIX
-# This assumes that you do not have a KNIX deployment yet.
-helm install --name mfn1 <helm-chart-url>
-```
-To remove the deployment named mfn1:
-
-```bash
-helm delete --purge mfn1
-```
-A namespace can be chosen with --namespace my-ns. The --debug option will provide detailed output of what is being deployed.
+Please refer to the Helm package deployment [README](deploy/helm/microfunctions/README.md).
 
 ### Installing KNIX MicroFunctions on Bare Metal or Virtual Machines
 
 KNIX MicroFunctions can also be installed using Ansible playbooks on bare metal or virtual machines. You'll need a user with sudo access.
 
-Please refer to the installation [README](https://github.com/knix-microfunctions/knix/blob/master/deploy/ansible/README.md).
-
-### Connecting to the KNIX web GUI to create functions and workflows
-Nginx is exposed through the Service nx- (e.g. nx-mfn-test) by default on port 20080 (optionally, nginx can be configured with an SSL port).
-There's no default Ingress created.
-
-
+Please refer to the installation [README](deploy/ansible/README.md).
 
 # Hosted Service
 
@@ -66,11 +44,13 @@ More info on hosted services for hands-on experimentation with the **KNIX MicroF
 
 We encourage you to participate in this open source project. We welcome pull requests, bug reports, ideas, code reviews, or any kind of positive contribution.
 
-Before you attempt to make a contribution please read the [Code of Conduct](https://github.com/knix-microfunctions/knix/CODE_OF_CONDUCT.md).
+Before you attempt to make a contribution please read the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 * [View current Issues](https://github.com/knix-microfunctions/knix/issues) or [view current Pull Requests](https://github.com/knix-microfunctions/knix/pulls).
 
-* Join our Slack workspace [https://knix.slack.com](https://join.slack.com/t/knix/shared_invite/zt-dm7agzna-8~cVsYqAMKenxFhFDARjvw)
+* Join our Slack workspace [https://knix.slack.com](https://join.slack.com/t/knix/shared_invite/zt-dm7agzna-8~cVsYqAMKenxFhFDARjvw) which has 'users' and 'dev' channels.
+
+* (Optionally) subscribe to [knix-users mailing list](https://groups.google.com/forum/#!forum/knix-users) and/or [knix-dev mailing list](https://groups.google.com/forum/#!forum/knix-dev).
 
 # License
 

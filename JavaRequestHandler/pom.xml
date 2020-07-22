@@ -21,17 +21,17 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-api</artifactId>
-      <version>2.12.0</version>
+      <version>2.13.2</version>
     </dependency>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
-      <version>2.12.0</version>
+      <version>2.13.2</version>
     </dependency>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-slf4j-impl</artifactId>
-      <version>2.12.0</version>
+      <version>2.13.2</version>
     </dependency>
     <dependency>
       <groupId>net.sourceforge.argparse4j</groupId>
@@ -41,7 +41,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>0.12.0</version>
+      <version>${libthrift.version}</version>
     </dependency>
     <dependency>
       <groupId>com.kohlschutter.junixsocket</groupId>
@@ -81,6 +81,20 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.1.1</version>
+        <configuration>
+          <doctitle>KNIX MicroFunctions Java API</doctitle>
+          <windowtitle>KNIX MicroFunctions Java API</windowtitle>
+          <notree>true</notree>
+          <sourceFileIncludes>
+              <include>MicroFunctionsAPI.java</include>
+          </sourceFileIncludes>
+          <sourcepath>${basedir}/src/main/java/org/microfunctions/mfnapi</sourcepath>
+        </configuration>
       </plugin>
     </plugins>
   </build>

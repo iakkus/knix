@@ -14,16 +14,24 @@
 
 SHELL := /bin/bash
 -include ../proxy.mk
+include ../build_env.mk
 UID:=`id -u`
 GID:=`id -g`
-all: target/frontend.jar
 
-src/main/java/data_layer:
+all: build_thrift \
+	target/frontend.jar
+
+build_thrift:
+	cd ../build_tools/thrift/$(THRIFT_VERSION)/; ./build_thrift.sh; cd -
+
+THRIFT=$(shell find src/main/java/org/microfunctions/data_layer -type f -size +1c) src/main/java/org/microfunctions/data_layer
+
+$(THRIFT): ../DataLayerService/thrift/DataLayerMessage.thrift ../DataLayerService/thrift/DataLayerService.thrift ../build_env.mk
 	docker run --rm -it --name frontend-thrift \
 		--user $(UID):$(GID) \
 		-v $(CURDIR)/../DataLayerService:/usr/src/datalayer \
 		-v $(CURDIR):/usr/src/frontend -w /usr/src/frontend \
-		thrift:0.12.0 \
+		$(THRIFT_IMAGE_NAME):$(THRIFT_VERSION) \
 		bash -c 'thrift --gen java -out ./src/main/java/ /usr/src/datalayer/thrift/DataLayerMessage.thrift; thrift --gen java -out ./src/main/java/ /usr/src/datalayer/thrift/DataLayerService.thrift'
 
 # In case the user doesn't have maven configurations in the home directory, we need to create it
@@ -42,14 +50,15 @@ src/main/java/data_layer:
 	mv $@.tmp $@
 
 GIT_REVISION:=`git describe --tags --always --dirty=-dirty`
-target/frontend.jar: src/main/java/data_layer ~/.m2/settings-docker.xml
+SOURCES=$(shell find ./src/main -type f -size +1c)
+target/frontend.jar: $(SOURCES) pom.xml ~/.m2/settings-docker.xml
 	if [ ! -e ~/.m2/repository ]; then mkdir -p ~/.m2/repository; fi
 	docker run --rm --name frontend-maven \
 	--user $(UID):$(GID) \
 	-v ~/.m2:/usr/share/maven/ref \
 	-v $(CURDIR):/usr/src/frontend -w /usr/src/frontend \
 	maven:3.6.1-jdk-8 \
-	mvn -Drevision=$(GIT_REVISION) -Dargline="-Duser.home=/tmp" -s /usr/share/maven/ref/settings-docker.xml package
+	mvn -Drevision=$(GIT_REVISION) -Dlibthrift.version=$(MVN_LIBTHRIFT_VERSION) -Dargline="-Duser.home=/tmp" -s /usr/share/maven/ref/settings-docker.xml package
 
 clean:
 	rm -rf ./target

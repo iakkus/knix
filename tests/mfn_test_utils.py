@@ -42,14 +42,14 @@ mfntestpassed = MfnAppTextFormat.STYLE_BOLD + MfnAppTextFormat.COLOR_GREEN + 'PA
 mfntestfailed = MfnAppTextFormat.STYLE_BOLD + MfnAppTextFormat.COLOR_RED + 'FAILED' + MfnAppTextFormat.END + MfnAppTextFormat.END
 
 class MFNTest():
-    def __init__(self, test_name=None, timeout=None, workflow_filename=None, new_user=False):
+    def __init__(self, test_name=None, timeout=None, workflow_filename=None, new_user=False, delete_user=False):
 
         self._settings = self._get_settings()
 
         if new_user:
             random_str = str(random.randint(0, 10000)) + "_" + str(time.time())
             random_user = hashlib.sha256(random_str.encode()).hexdigest()
-            random_user = "test_" + random_user[0:31] + "@microfunctions.org"
+            random_user = "test_" + random_user[0:31] + "@knix.io"
             print("User: " + random_user)
             self._client = MfnClient(mfn_user=random_user)
         else:
@@ -66,7 +66,7 @@ class MFNTest():
             self._workflow_folder = self._workflow_filename[:ind+1]
         else:
             self._workflow_folder = "./"
-        print("Workflow folder: " + self._workflow_folder)
+        #print("Workflow folder: " + self._workflow_folder)
 
         self._workflow_description = self._get_json_file(self._workflow_filename)
 
@@ -205,6 +205,12 @@ class MFNTest():
                     for branch in branches:
                         resource_info_map = self._get_resource_info_map(branch, resource_info_map)
 
+                if "Type" in state and state["Type"] == "Map":
+                    branch = state['Iterator']
+                    #print(str(branch))
+                    resource_info_map = self._get_resource_info_map(branch, resource_info_map)
+                    #print(str(resource_info_map))
+
         else:
             print("ERROR: invalid workflow description.")
             assert False
@@ -249,7 +255,7 @@ class MFNTest():
                 with open(resource_req_filename, "r") as f:
                     reqs = f.read().strip()
                     g.requirements = reqs
-                    print("set requirements for function: " + resource_name + " " + reqs)
+                    #print("set requirements for function: " + resource_name + " " + reqs)
 
             # resource environment variables
             # upload the resource environment variables
@@ -257,7 +263,7 @@ class MFNTest():
                 with open(resource_env_filename, "r") as f:
                     env_vars = f.read().strip()
                     g.environment_variables = env_vars
-                    print("set environment variables for function: " + resource_name + " " + env_vars)
+                    #print("set environment variables for function: " + resource_name + " " + env_vars)
 
         except Exception as e:
             print("ERROR: Could not create resource.")
@@ -300,19 +306,17 @@ class MFNTest():
     def undeploy_workflow(self):
         existing_workflows = self._client.workflows
         for wf in existing_workflows:
-            #print wf.name, wf.wid, wf.status
-            if wf.name == self._workflow_name and wf.status == "deployed":
-                wf.undeploy(self._settings["timeout"])
+            if wf.name == self._workflow_name:
+                if wf.status == "deployed":
+                    wf.undeploy(self._settings["timeout"])
+                    print("Workflow undeployed.")
                 self._client.delete_workflow(wf)
-                print("Workflow undeployed.")
                 break
 
         existing_resources = self._client.functions
 
         for resource_name in self._workflow_resources:
             self._delete_resource_if_existing(existing_resources, resource_name)
-
-        self._client.disconnect()
 
     def get_test_workflow_endpoints(self):
         if self._workflow.status == "deployed":
@@ -346,6 +350,7 @@ class MFNTest():
         except Exception as e:
             any_failed_tests = True
             self.undeploy_workflow()
+            self.cleanup()
             print(str(e))
             raise e
         finally:
@@ -373,8 +378,14 @@ class MFNTest():
                     #print("Total time to execute: " + str(t_total) + " (ms)")
 
                 if check_just_keys:
+                    if isinstance(res, str):
+                        res = json.loads(res)
+
                     if set(rn.keys()) == set(res.keys()):
-                        current_test_passed = True
+                         current_test_passed = True
+                    else:
+                        raise Exception("Error: unsupported workflow result type")
+
                 else:
                     if rn == json.loads(res):
                         current_test_passed = True
@@ -406,6 +417,7 @@ class MFNTest():
                 self._print_logs(self._workflow.logs())
             if should_undeploy:
                 self.undeploy_workflow()
+                self.cleanup()
 
     def _print_logs(self, logs):
         print(logs)
@@ -486,8 +498,10 @@ class MFNTest():
         self.exec_tests(testtuplelist, check_just_keys=True)
 
     # compatibility with older tests
-    def cleanup(self):
-        return
+    def cleanup(self, delete_user=False):
+        if delete_user:
+            self._client.delete_user()
+        self._client.disconnect()
 
 def combine_output(output, error):
     output = output.split("\n")
